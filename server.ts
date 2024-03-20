@@ -23,6 +23,7 @@ app.use(cors());
 
 // Apply rate limiter to all requests
 app.use(limiter);
+app.enable('trust proxy');
 
 // Path to the file containing historical market data
 const dataFilePath = path.join(__dirname, "market_data.json");

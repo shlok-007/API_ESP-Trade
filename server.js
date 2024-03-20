@@ -20,6 +20,7 @@ var limiter = (0, express_rate_limit_1.default)({
 app.use(cors());
 // Apply rate limiter to all requests
 app.use(limiter);
+app.enable('trust proxy');
 // Path to the file containing historical market data
 var dataFilePath = path.join(__dirname, "market_data.json");
 var transactionLogFilePath = path.join(__dirname, "transactions_log.json");
