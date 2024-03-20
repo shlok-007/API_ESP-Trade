@@ -215,6 +215,11 @@ app.post("/api/buy", validateAccess, (req: Request, res: Response) => {
 
   // Perform buy operation
   const buyAmount = parseFloat(amount as string);
+
+  if(buyAmount * stockPrice > teamData[teamid as string].balance) {
+    return res.status(403).json({ error: "Forbidden. Insufficient balance." });
+  }
+
   teamData[teamid as string].balance -= buyAmount * stockPrice;
   teamData[teamid as string].stocks += buyAmount;
   // Log transaction
@@ -229,6 +234,10 @@ app.post("/api/buy", validateAccess, (req: Request, res: Response) => {
 // Endpoint to sell stocks
 app.post("/api/sell", validateAccess, (req: Request, res: Response) => {
   const { teamid, amount } = req.query;
+
+  if(teamData[teamid as string].stocks < parseFloat(amount as string)) {
+    return res.status(403).json({ error: "Forbidden. Insufficient stocks to sell." });
+  }
 
   // Get the current stock price
   let stockPrice = parseFloat(getCurrentStockPrice(false) as string);
@@ -274,6 +283,11 @@ app.get("/api/transactions", validateAccess, (req: Request, res: Response) => {
 // Faucet endpoint to get free money for testing
 app.post("/api/faucet", validateAccess, (req: Request, res: Response) => {
   const { teamid } = req.query;
+
+  if(teamData[teamid as string].balance >= 10000) {
+    return res.status(403).json({ error: "Forbidden. You already have enough balance." });
+  }
+
   teamData[teamid as string].balance += init_balance;
   logTransaction(teamid as string, "faucet", init_balance, 0);
   res.json({ message: `Successfully received $${init_balance} from faucet.` });
