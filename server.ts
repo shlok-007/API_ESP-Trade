@@ -257,7 +257,7 @@ app.post("/api/faucet", validateTeamID, (req: Request, res: Response) => {
 });
 
 // Start the server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 2286;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
