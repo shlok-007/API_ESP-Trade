@@ -1,7 +1,13 @@
-import express, { Request, Response } from "express";
-import fs from "fs";
-import path from "path";
+// import express, { Request, Response } from "express";
+import express = require("express");
+import { Request, Response } from "express";
+// import fs from "fs";
+import fs = require("fs");
+// import path from "path";
+import path = require("path");
 import rateLimit from "express-rate-limit";
+// import cors from "cors";
+import cors = require("cors");
 
 const app = express();
 
@@ -11,6 +17,9 @@ const limiter = rateLimit({
   max: 10, // limit each IP to 100 requests per windowMs
   message: "Too many requests from this IP, please try again later.",
 });
+
+// Enable CORS
+app.use(cors());
 
 // Apply rate limiter to all requests
 app.use(limiter);
