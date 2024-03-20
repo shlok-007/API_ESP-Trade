@@ -103,7 +103,7 @@ const validateAccess = (req: Request, res: Response, next: any) => {
   const apiKey = req.headers["api-key"] as string;
 
   if (!teamid || !allowedTeamIDs.includes(teamid as string) || !apiKey || apiKey !== apiKeys[teamid as string]) {
-    return res.status(401).json({ error: "Unauthorized. Invalid team ID." });
+    return res.status(401).json({ error: "Unauthorized. Invalid team ID/API key." });
   }
 
   // If team ID is valid, initialize team data if not already initialized
