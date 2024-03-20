@@ -13,6 +13,6 @@ def csv_to_json(csv_file_path, json_file_path):
 
 # Example usage:
 csv_file_path = 'TSLA_1min_firstratedata.csv'  # Specify the path to your CSV file
-json_file_path = 'output.json'  # Specify the path for the output JSON file
+json_file_path = 'market_data.json'  # Specify the path for the output JSON file
 
 csv_to_json(csv_file_path, json_file_path)

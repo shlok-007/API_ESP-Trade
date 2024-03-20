@@ -29,7 +29,7 @@ const dataFilePath = path.join(__dirname, "market_data.json");
 const transactionLogFilePath = path.join(__dirname, "transactions_log.json");
 
 const dayOffset = 0;
-const startingTimestamp = new Date("2024-03-19T22:30:00Z");
+const startingTimestamp = new Date("2024-03-20T04:00:00Z");
 
 interface MarketData {
   open: string;
@@ -75,7 +75,7 @@ const allowedTeamIDs = [
 ];
 // <TeamID>.<TeamNumber>
 
-const apiKeys : { [key: string]: string } = {
+const apiKeys: { [key: string]: string } = {
   "38.1": "op8L9vcGfuCwlHIVEMUM55ugcisbkWjP",
   "38.2": "ptEMhrBr3Yu0bE2iMFZkgwQZAJprbcx2",
   "23.1": "YcxRCxEbvI1gyVg93ekfIuChVIP8vwcF",
@@ -97,28 +97,69 @@ interface TeamData {
 let teamData: { [key: string]: TeamData } = {};
 const init_balance = 10000;
 
+const restoreTeamDataFromTransactionLog = (): void => {
+  try {
+    // Read transactions from the log file
+    const data = fs.readFileSync(transactionLogFilePath, "utf8");
+    const allTransactions = JSON.parse(data);
+
+    // Iterate through each transaction
+    allTransactions.forEach((transaction: any) => {
+      const { teamID, action, amount, stockPrice } = transaction;
+
+      // If team data doesn't exist, initialize it with initial balance and stocks
+      if (!teamData[teamID]) {
+        teamData[teamID] = { balance: init_balance, stocks: 0 };
+      }
+
+      // Update team's balance and stocks based on the transaction
+      if (action === "buy") {
+        teamData[teamID].balance -= amount * stockPrice;
+        teamData[teamID].stocks += amount;
+      } else if (action === "sell") {
+        teamData[teamID].balance += amount * stockPrice;
+        teamData[teamID].stocks -= amount;
+      }
+    });
+
+    console.log("Team data restored from transaction log successfully.");
+  } catch (err) {
+    console.error("Error restoring team data from transaction log:", err);
+  }
+};
+
+// Restore team data from transaction log during server startup
+restoreTeamDataFromTransactionLog();
+
 // Middleware function to validate team ID
 const validateAccess = (req: Request, res: Response, next: any) => {
-  const { teamid } = req.query;
+  const teamid = req.headers["teamid"] as string;
   const apiKey = req.headers["api-key"] as string;
 
-  if (!teamid || !allowedTeamIDs.includes(teamid as string) || !apiKey || apiKey !== apiKeys[teamid as string]) {
-    return res.status(401).json({ error: "Unauthorized. Invalid team ID/API key." });
+  if (
+    !teamid ||
+    !allowedTeamIDs.includes(teamid) ||
+    !apiKey ||
+    apiKey !== apiKeys[teamid]
+  ) {
+    return res
+      .status(401)
+      .json({ error: "Unauthorized. Invalid team ID/API key." });
   }
 
   // If team ID is valid, initialize team data if not already initialized
-  if (!teamData[teamid as string]) {
-    teamData[teamid as string] = { balance: init_balance, stocks: 0 }; // Initial balance for each team
+  if (!teamData[teamid]) {
+    teamData[teamid] = { balance: init_balance, stocks: 0 }; // Initial balance for each team
     console.log("Initialized data for team:", teamid);
   }
 
   // If team's balance is zero, disallow trading
-  if (teamData[teamid as string].balance <= 0) {
+  if (teamData[teamid].balance <= 0) {
     return res.status(403).json({ error: "Forbidden. Insufficient balance." });
   }
 
   // If team's stocks are zero and they're attempting to sell, disallow trading
-  if (teamData[teamid as string].stocks <= 0 && req.path === "/api/sell") {
+  if (teamData[teamid].stocks <= 0 && req.path === "/api/sell") {
     return res
       .status(403)
       .json({ error: "Forbidden. Insufficient stocks to sell." });
@@ -134,7 +175,7 @@ const getCurrentStockPrice = (x: boolean): string | MarketData => {
   const dataPointIntervalInMinutes = 1;
 
   // Get the current system time
-  const currentTime = new Date();
+  const currentTime = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
 
   // Calculate the difference in minutes between the starting timestamp and current time
   const timeDiffInMinutes = Math.floor(
@@ -148,12 +189,24 @@ const getCurrentStockPrice = (x: boolean): string | MarketData => {
     Math.min(timeDiffInMinutes, marketData.length - 1)
   );
 
-  // Return the 'close' price as the stock price at the calculated row number
+  marketData[rowNumber].time = currentTime.toISOString();
+
   if (x) return marketData[rowNumber];
   return marketData[rowNumber].close;
 };
 
-// Middleware function to log transactions
+interface Transaction {
+  teamID: string;
+  action: string;
+  amount: number;
+  stockPrice: number;
+  timestamp: string;
+}
+
+// Array to store transactions in memory
+let transactionBuffer: Transaction[] = [];
+
+// Function to log transactions to the buffer
 const logTransaction = (
   teamID: string,
   action: string,
@@ -165,35 +218,44 @@ const logTransaction = (
     action,
     amount,
     stockPrice,
-    // time + 5.5
     timestamp: new Date(
       new Date().getTime() + 5.5 * 60 * 60 * 1000
     ).toISOString(),
   };
 
-  try {
-    // const transactionLogFilePath = path.join(__dirname, 'transaction_log.json');
-    let transactions: any[] = [];
-    if (fs.existsSync(transactionLogFilePath)) {
+  // Push the new transaction to the buffer
+  transactionBuffer.push(transaction);
+};
+
+// Function to periodically write transactions from buffer to file
+const flushTransactionBuffer = () => {
+  if (transactionBuffer.length > 0) {
+    try {
       // Read existing transactions from the file
       const data = fs.readFileSync(transactionLogFilePath, "utf8");
-      transactions = JSON.parse(data);
+      const existingTransactions = JSON.parse(data);
+
+      // Append the transactions from buffer to existing transactions
+      const allTransactions = existingTransactions.concat(transactionBuffer);
+
+      // Write all transactions back to the file
+      fs.writeFileSync(
+        transactionLogFilePath,
+        JSON.stringify(allTransactions, null, 2)
+      );
+
+      // Clear the transaction buffer after writing
+      transactionBuffer = [];
+
+      console.log("Transactions flushed to file successfully.");
+    } catch (err) {
+      console.error("Error flushing transactions to file:", err);
     }
-
-    // Append the new transaction to the existing transactions array
-    transactions.push(transaction);
-
-    // Write the updated transactions array back to the file
-    fs.writeFileSync(
-      transactionLogFilePath,
-      JSON.stringify(transactions, null, 2)
-    );
-
-    // console.log('Transaction logged:', transaction);
-  } catch (err) {
-    console.error("Error logging transaction:", err);
   }
 };
+
+// Set interval to periodically flush transaction buffer to file (e.g., every 5 minutes)
+setInterval(flushTransactionBuffer, 5 * 60 * 1000); // Adjust the interval as needed
 
 // Endpoint to serve historical market data for a stock
 app.get(
@@ -209,23 +271,23 @@ app.get(
 
 // Endpoint to buy stocks
 app.post("/api/buy", validateAccess, (req: Request, res: Response) => {
-  const { teamid, amount } = req.query;
+  const teamid = req.headers["teamid"] as string;
+  const { amount } = req.query;
+
   // Get the current stock price
   let stockPrice = parseFloat(getCurrentStockPrice(false) as string);
 
   // Perform buy operation
   const buyAmount = parseFloat(amount as string);
 
-  if(buyAmount * stockPrice > teamData[teamid as string].balance) {
+  if (buyAmount * stockPrice > teamData[teamid].balance) {
     return res.status(403).json({ error: "Forbidden. Insufficient balance." });
   }
 
-  teamData[teamid as string].balance -= buyAmount * stockPrice;
-  teamData[teamid as string].stocks += buyAmount;
+  teamData[teamid].balance -= buyAmount * stockPrice;
+  teamData[teamid].stocks += buyAmount;
   // Log transaction
-  logTransaction(teamid as string, "buy", buyAmount, stockPrice);
-//   console.log("Transaction logged");
-
+  logTransaction(teamid, "buy", buyAmount, stockPrice);
   res.json({
     message: `Successfully bought ${buyAmount} stocks at $${stockPrice} per stock.`,
   });
@@ -233,10 +295,13 @@ app.post("/api/buy", validateAccess, (req: Request, res: Response) => {
 
 // Endpoint to sell stocks
 app.post("/api/sell", validateAccess, (req: Request, res: Response) => {
-  const { teamid, amount } = req.query;
+  const teamid = req.headers["teamid"] as string;
+  const { amount } = req.query;
 
-  if(teamData[teamid as string].stocks < parseFloat(amount as string)) {
-    return res.status(403).json({ error: "Forbidden. Insufficient stocks to sell." });
+  if (teamData[teamid].stocks < parseFloat(amount as string)) {
+    return res
+      .status(403)
+      .json({ error: "Forbidden. Insufficient stocks to sell." });
   }
 
   // Get the current stock price
@@ -244,10 +309,10 @@ app.post("/api/sell", validateAccess, (req: Request, res: Response) => {
 
   // Perform sell operation
   const sellAmount = parseFloat(amount as string);
-  teamData[teamid as string].balance += sellAmount * stockPrice;
-  teamData[teamid as string].stocks -= sellAmount;
+  teamData[teamid].balance += sellAmount * stockPrice;
+  teamData[teamid].stocks -= sellAmount;
   // Log transaction
-  logTransaction(teamid as string, "sell", sellAmount, stockPrice);
+  logTransaction(teamid, "sell", sellAmount, stockPrice);
 
   res.json({
     message: `Successfully sold ${sellAmount} stocks at $${stockPrice} per stock.`,
@@ -256,14 +321,14 @@ app.post("/api/sell", validateAccess, (req: Request, res: Response) => {
 
 // Endpoint to get team status
 app.get("/api/mystatus", validateAccess, (req: Request, res: Response) => {
-  const { teamid } = req.query;
-  const teamStatus = teamData[teamid as string];
+  const teamid = req.headers["teamid"] as string;
+  const teamStatus = teamData[teamid];
   res.json(teamStatus);
 });
 
 // Endpoint to get all transactions for a team
 app.get("/api/transactions", validateAccess, (req: Request, res: Response) => {
-  const { teamid } = req.query;
+  const teamid = req.headers["teamid"] as string;
 
   try {
     const data = fs.readFileSync(transactionLogFilePath, "utf8");
@@ -282,14 +347,16 @@ app.get("/api/transactions", validateAccess, (req: Request, res: Response) => {
 
 // Faucet endpoint to get free money for testing
 app.post("/api/faucet", validateAccess, (req: Request, res: Response) => {
-  const { teamid } = req.query;
+  const teamid = req.headers["teamid"] as string;
 
-  if(teamData[teamid as string].balance >= 10000) {
-    return res.status(403).json({ error: "Forbidden. You already have enough balance." });
+  if (teamData[teamid].balance >= 10000) {
+    return res
+      .status(403)
+      .json({ error: "Forbidden. You already have enough balance." });
   }
 
-  teamData[teamid as string].balance += init_balance;
-  logTransaction(teamid as string, "faucet", init_balance, 0);
+  teamData[teamid].balance += init_balance;
+  logTransaction(teamid, "faucet", init_balance, 0);
   res.json({ message: `Successfully received $${init_balance} from faucet.` });
 });
 
