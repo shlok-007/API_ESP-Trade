@@ -75,6 +75,19 @@ const allowedTeamIDs = [
 ];
 // <TeamID>.<TeamNumber>
 
+const apiKeys : { [key: string]: string } = {
+  "38.1": "op8L9vcGfuCwlHIVEMUM55ugcisbkWjP",
+  "38.2": "ptEMhrBr3Yu0bE2iMFZkgwQZAJprbcx2",
+  "23.1": "YcxRCxEbvI1gyVg93ekfIuChVIP8vwcF",
+  "23.2": "OCCeIsDLOFe9tcXERioLP8UV86kevc7H",
+  "99.1": "ilr3r4csxHas7roU1pPr7MvKK6SXHxyT",
+  "99.2": "b9i9zNDBYZ0ZvsnK2c2Pzctwark56FKL",
+  "19.1": "qzrmt1k4UbUTl2BO4zyjqhf07BtHVBOz",
+  "19.2": "td53qoCNU417d44LEz7GJw0y0eJjiGHe",
+  "65.1": "U3E4crk15do5MA2M8FOgwYPgotXDkFtM",
+  "65.2": "9qEj11Jwyc483S8gZ0NEHW1bCINwbTIt",
+};
+
 // Object to store team data (balance and stock holdings)
 interface TeamData {
   balance: number;
@@ -85,10 +98,11 @@ let teamData: { [key: string]: TeamData } = {};
 const init_balance = 10000;
 
 // Middleware function to validate team ID
-const validateTeamID = (req: Request, res: Response, next: any) => {
+const validateAccess = (req: Request, res: Response, next: any) => {
   const { teamid } = req.query;
+  const apiKey = req.headers["api-key"] as string;
 
-  if (!teamid || !allowedTeamIDs.includes(teamid as string)) {
+  if (!teamid || !allowedTeamIDs.includes(teamid as string) || !apiKey || apiKey !== apiKeys[teamid as string]) {
     return res.status(401).json({ error: "Unauthorized. Invalid team ID." });
   }
 
@@ -184,7 +198,7 @@ const logTransaction = (
 // Endpoint to serve historical market data for a stock
 app.get(
   "/api/curr-stock-data",
-  validateTeamID,
+  validateAccess,
   (req: Request, res: Response) => {
     // Get the current stock price
     const stockPrice = getCurrentStockPrice(true);
@@ -194,7 +208,7 @@ app.get(
 );
 
 // Endpoint to buy stocks
-app.post("/api/buy", validateTeamID, (req: Request, res: Response) => {
+app.post("/api/buy", validateAccess, (req: Request, res: Response) => {
   const { teamid, amount } = req.query;
   // Get the current stock price
   let stockPrice = parseFloat(getCurrentStockPrice(false) as string);
@@ -213,7 +227,7 @@ app.post("/api/buy", validateTeamID, (req: Request, res: Response) => {
 });
 
 // Endpoint to sell stocks
-app.post("/api/sell", validateTeamID, (req: Request, res: Response) => {
+app.post("/api/sell", validateAccess, (req: Request, res: Response) => {
   const { teamid, amount } = req.query;
 
   // Get the current stock price
@@ -232,14 +246,14 @@ app.post("/api/sell", validateTeamID, (req: Request, res: Response) => {
 });
 
 // Endpoint to get team status
-app.get("/api/mystatus", validateTeamID, (req: Request, res: Response) => {
+app.get("/api/mystatus", validateAccess, (req: Request, res: Response) => {
   const { teamid } = req.query;
   const teamStatus = teamData[teamid as string];
   res.json(teamStatus);
 });
 
 // Endpoint to get all transactions for a team
-app.get("/api/transactions", validateTeamID, (req: Request, res: Response) => {
+app.get("/api/transactions", validateAccess, (req: Request, res: Response) => {
   const { teamid } = req.query;
 
   try {
@@ -258,7 +272,7 @@ app.get("/api/transactions", validateTeamID, (req: Request, res: Response) => {
 });
 
 // Faucet endpoint to get free money for testing
-app.post("/api/faucet", validateTeamID, (req: Request, res: Response) => {
+app.post("/api/faucet", validateAccess, (req: Request, res: Response) => {
   const { teamid } = req.query;
   teamData[teamid as string].balance += init_balance;
   logTransaction(teamid as string, "faucet", init_balance, 0);

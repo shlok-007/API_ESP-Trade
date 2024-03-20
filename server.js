@@ -52,12 +52,26 @@ var allowedTeamIDs = [
     "65.1",
     "65.2",
 ];
+// <TeamID>.<TeamNumber>
+var apiKeys = {
+    "38.1": "op8L9vcGfuCwlHIVEMUM55ugcisbkWjP",
+    "38.2": "ptEMhrBr3Yu0bE2iMFZkgwQZAJprbcx2",
+    "23.1": "YcxRCxEbvI1gyVg93ekfIuChVIP8vwcF",
+    "23.2": "OCCeIsDLOFe9tcXERioLP8UV86kevc7H",
+    "99.1": "ilr3r4csxHas7roU1pPr7MvKK6SXHxyT",
+    "99.2": "b9i9zNDBYZ0ZvsnK2c2Pzctwark56FKL",
+    "19.1": "qzrmt1k4UbUTl2BO4zyjqhf07BtHVBOz",
+    "19.2": "td53qoCNU417d44LEz7GJw0y0eJjiGHe",
+    "65.1": "U3E4crk15do5MA2M8FOgwYPgotXDkFtM",
+    "65.2": "9qEj11Jwyc483S8gZ0NEHW1bCINwbTIt",
+};
 var teamData = {};
 var init_balance = 10000;
 // Middleware function to validate team ID
-var validateTeamID = function (req, res, next) {
+var validateAccess = function (req, res, next) {
     var teamid = req.query.teamid;
-    if (!teamid || !allowedTeamIDs.includes(teamid)) {
+    var apiKey = req.headers["api-key"];
+    if (!teamid || !allowedTeamIDs.includes(teamid) || !apiKey || apiKey !== apiKeys[teamid]) {
         return res.status(401).json({ error: "Unauthorized. Invalid team ID." });
     }
     // If team ID is valid, initialize team data if not already initialized
@@ -123,13 +137,13 @@ var logTransaction = function (teamID, action, amount, stockPrice) {
     }
 };
 // Endpoint to serve historical market data for a stock
-app.get("/api/curr-stock-data", validateTeamID, function (req, res) {
+app.get("/api/curr-stock-data", validateAccess, function (req, res) {
     // Get the current stock price
     var stockPrice = getCurrentStockPrice(true);
     res.json(stockPrice);
 });
 // Endpoint to buy stocks
-app.post("/api/buy", validateTeamID, function (req, res) {
+app.post("/api/buy", validateAccess, function (req, res) {
     var _a = req.query, teamid = _a.teamid, amount = _a.amount;
     // Get the current stock price
     var stockPrice = parseFloat(getCurrentStockPrice(false));
@@ -145,7 +159,7 @@ app.post("/api/buy", validateTeamID, function (req, res) {
     });
 });
 // Endpoint to sell stocks
-app.post("/api/sell", validateTeamID, function (req, res) {
+app.post("/api/sell", validateAccess, function (req, res) {
     var _a = req.query, teamid = _a.teamid, amount = _a.amount;
     // Get the current stock price
     var stockPrice = parseFloat(getCurrentStockPrice(false));
@@ -160,13 +174,13 @@ app.post("/api/sell", validateTeamID, function (req, res) {
     });
 });
 // Endpoint to get team status
-app.get("/api/mystatus", validateTeamID, function (req, res) {
+app.get("/api/mystatus", validateAccess, function (req, res) {
     var teamid = req.query.teamid;
     var teamStatus = teamData[teamid];
     res.json(teamStatus);
 });
 // Endpoint to get all transactions for a team
-app.get("/api/transactions", validateTeamID, function (req, res) {
+app.get("/api/transactions", validateAccess, function (req, res) {
     var teamid = req.query.teamid;
     try {
         var data = fs.readFileSync(transactionLogFilePath, "utf8");
@@ -183,7 +197,7 @@ app.get("/api/transactions", validateTeamID, function (req, res) {
     }
 });
 // Faucet endpoint to get free money for testing
-app.post("/api/faucet", validateTeamID, function (req, res) {
+app.post("/api/faucet", validateAccess, function (req, res) {
     var teamid = req.query.teamid;
     teamData[teamid].balance += init_balance;
     logTransaction(teamid, "faucet", init_balance, 0);
