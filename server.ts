@@ -23,7 +23,7 @@ app.use(cors());
 
 // Apply rate limiter to all requests
 app.use(limiter);
-app.enable('trust proxy');
+// app.enable('trust proxy');
 
 // Path to the file containing historical market data
 const dataFilePath = path.join(__dirname, "market_data.json");
@@ -120,6 +120,8 @@ const restoreTeamDataFromTransactionLog = (): void => {
       } else if (action === "sell") {
         teamData[teamID].balance += amount * stockPrice;
         teamData[teamID].stocks -= amount;
+      } else if (action === "faucet") {
+        teamData[teamID].balance += amount;
       }
     });
 
@@ -275,6 +277,8 @@ app.post("/api/buy", validateAccess, (req: Request, res: Response) => {
   const teamid = req.headers["teamid"] as string;
   const { amount } = req.query;
 
+  if(!amount) return res.status(400).json({ error: "Amount is required." });
+
   // Get the current stock price
   let stockPrice = parseFloat(getCurrentStockPrice(false) as string);
 
@@ -298,6 +302,8 @@ app.post("/api/buy", validateAccess, (req: Request, res: Response) => {
 app.post("/api/sell", validateAccess, (req: Request, res: Response) => {
   const teamid = req.headers["teamid"] as string;
   const { amount } = req.query;
+
+  if(!amount) return res.status(400).json({ error: "Amount is required." });
 
   if (teamData[teamid].stocks < parseFloat(amount as string)) {
     return res
