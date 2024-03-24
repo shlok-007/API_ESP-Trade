@@ -20,7 +20,7 @@ var limiter = (0, express_rate_limit_1.default)({
 app.use(cors());
 // Apply rate limiter to all requests
 app.use(limiter);
-app.enable('trust proxy');
+// app.enable('trust proxy');
 // Path to the file containing historical market data
 var dataFilePath = path.join(__dirname, "market_data.json");
 var transactionLogFilePath = path.join(__dirname, "transactions_log.json");
@@ -88,6 +88,9 @@ var restoreTeamDataFromTransactionLog = function () {
             else if (action === "sell") {
                 teamData[teamID].balance += amount * stockPrice;
                 teamData[teamID].stocks -= amount;
+            }
+            else if (action === "faucet") {
+                teamData[teamID].balance += amount;
             }
         });
         console.log("Team data restored from transaction log successfully.");
@@ -190,6 +193,8 @@ app.get("/api/curr-stock-data", validateAccess, function (req, res) {
 app.post("/api/buy", validateAccess, function (req, res) {
     var teamid = req.headers["teamid"];
     var amount = req.query.amount;
+    if (!amount)
+        return res.status(400).json({ error: "Amount is required." });
     // Get the current stock price
     var stockPrice = parseFloat(getCurrentStockPrice(false));
     // Perform buy operation
@@ -209,6 +214,8 @@ app.post("/api/buy", validateAccess, function (req, res) {
 app.post("/api/sell", validateAccess, function (req, res) {
     var teamid = req.headers["teamid"];
     var amount = req.query.amount;
+    if (!amount)
+        return res.status(400).json({ error: "Amount is required." });
     if (teamData[teamid].stocks < parseFloat(amount)) {
         return res
             .status(403)
