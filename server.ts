@@ -339,7 +339,8 @@ app.get("/api/transactions", validateAccess, (req: Request, res: Response) => {
 
   try {
     const data = fs.readFileSync(transactionLogFilePath, "utf8");
-    const allTransactions = JSON.parse(data);
+    const existingTransactions = JSON.parse(data);
+    const allTransactions = existingTransactions.concat(transactionBuffer);
     // Filter transactions for the specific team
     const teamTransactions = allTransactions.filter((transaction: any) => {
       return transaction.teamID === teamid;
